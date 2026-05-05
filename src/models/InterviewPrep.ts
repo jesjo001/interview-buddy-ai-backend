@@ -1,5 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose';
-import { JobParsedData, PrepStatus, TopicDifficulty } from '../types';
+import { AnalysisStatus, JobParsedData, PrepStatus, TopicDifficulty } from '../types';
 
 export interface IDailyScheduleTopic {
   topicId: Types.ObjectId; // Refers to the Topic model
@@ -36,6 +36,7 @@ export interface IInterviewPrep extends Document {
     timeSpent: number; // minutes
   };
   status: PrepStatus;
+  analysisStatus: AnalysisStatus;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -82,6 +83,7 @@ const InterviewPrepSchema = new Schema<IInterviewPrep>({
     timeSpent: { type: Number, default: 0 },
   },
   status: { type: String, enum: Object.values(PrepStatus), default: PrepStatus.ACTIVE },
+  analysisStatus: { type: String, enum: Object.values(AnalysisStatus), default: AnalysisStatus.PENDING },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

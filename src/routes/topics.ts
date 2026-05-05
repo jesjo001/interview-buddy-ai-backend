@@ -5,6 +5,7 @@ import {
   getTopicById,
   markTopicAsComplete,
   updateTopicMasteryLevel,
+  updateTopic,
 } from '../controllers/topicController';
 
 const router = Router();
@@ -13,6 +14,7 @@ router.use(authenticate); // All topic routes are protected
 
 router.get('/prep/:prepId', getTopicsByPrepId);
 router.get('/:id', getTopicById);
+router.put('/:id', updateTopic);
 router.put('/:id/complete', markTopicAsComplete);
 router.put('/:id/mastery-level', updateTopicMasteryLevel);
 
