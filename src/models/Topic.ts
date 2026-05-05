@@ -13,6 +13,7 @@ export interface ITopic extends Document {
     edges: any[];
   };
   masteryLevel: number; // 0-100
+  notes: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +38,7 @@ const TopicSchema = new Schema<ITopic>({
     edges: [{ type: Schema.Types.Mixed }]
   },
   masteryLevel: { type: Number, default: 0, min: 0, max: 100 },
+  notes: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

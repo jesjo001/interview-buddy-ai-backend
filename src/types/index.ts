@@ -50,6 +50,13 @@ export enum PrepStatus {
   ARCHIVED = 'archived'
 }
 
+export enum AnalysisStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+}
+
 // AI Service related types
 export interface JobParsedData {
   jobTitle?: string;
@@ -71,4 +78,46 @@ export interface TopicContent {
 export interface Flashcard {
   front: string;
   back: string;
+}
+
+// Mock Interview Enums
+export enum InterviewType {
+  TECHNICAL = 'technical',
+  BEHAVIORAL = 'behavioral',
+  SYSTEM_DESIGN = 'system-design',
+  MIXED = 'mixed'
+}
+
+export enum InterviewDifficulty {
+  EASY = 'easy',
+  MEDIUM = 'medium',
+  HARD = 'hard'
+}
+
+export enum InterviewStatus {
+  IN_PROGRESS = 'in-progress',
+  COMPLETED = 'completed',
+  ABANDONED = 'abandoned'
+}
+
+export enum InterviewRound {
+  PHONE_SCREEN = 'phone-screen',
+  CODING = 'coding',
+  SYSTEM_DESIGN = 'system-design',
+  BEHAVIORAL = 'behavioral',
+  ONSITE = 'onsite',
+  EXECUTIVE = 'executive'
+}
+
+export enum UserLevel {
+  JUNIOR = 'junior',
+  MID = 'mid',
+  SENIOR = 'senior',
+  STAFF = 'staff'
+}
+
+export enum InterviewOutcome {
+  OFFER = 'offer',
+  REJECTED = 'rejected',
+  CONTINUING = 'continuing'
 }

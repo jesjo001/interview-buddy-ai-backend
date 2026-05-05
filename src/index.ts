@@ -1,15 +1,26 @@
 import app from './app';
 import connectDB from './config/database';
-import { jobQueueService } from './services/queueService'; // Import the job queue
+import { jobQueueService } from './services/queueService';
+import { recoverIncompletePreps } from './services/recoveryService';
 
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB
-connectDB();
+const bootstrap = async () => {
+  // 1. Connect to MongoDB first — everything depends on it
+  await connectDB();
 
-// Start the job queue (even if in-memory, it needs to be initialized)
-jobQueueService.start();
+  // 2. Re-enqueue any preps whose AI analysis was interrupted by a crash/restart
+  await recoverIncompletePreps();
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  // 3. Start the job queue processor
+  jobQueueService.start();
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+};
+
+bootstrap().catch((err) => {
+  console.error('[Bootstrap] Fatal startup error:', err?.message || err);
+  process.exit(1);
 });

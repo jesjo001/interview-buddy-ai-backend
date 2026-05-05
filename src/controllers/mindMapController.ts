@@ -25,6 +25,34 @@ export const getMindMapByTopicId = async (req: Request, res: Response, next: Nex
   }
 };
 
+export const getMindMapByPrepId = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { prepId } = req.params;
+    const userId = req.user._id;
+
+    // Verify the prep belongs to the user
+    const prep = await InterviewPrep.findOne({ _id: prepId, userId });
+    if (!prep) {
+      return res.status(404).json({ message: 'Interview prep not found or not authorized' });
+    }
+
+    const topics = await Topic.find({ interviewPrepId: prepId });
+
+    // Combine mind maps from all topics
+    const combinedMindMap = {
+      nodes: topics.flatMap(topic => topic.mindMap?.nodes || []),
+      edges: topics.flatMap(topic => topic.mindMap?.edges || []),
+    };
+
+    res.status(200).json(combinedMindMap);
+  } catch (err) {
+    next(err);
+  }
+};
+
+
 export const updateMindMapByTopicId = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Unauthorized' });

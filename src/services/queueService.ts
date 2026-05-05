@@ -8,7 +8,7 @@ import Flashcard from '../models/Flashcard';
 import { analyzeJobDescription, generateFlashcards, generateStudyPlanTopics, generateTopicContent, JobParsedData } from './aiService';
 import { calculateDaysBetween, getFutureDate } from '../utils/helpers';
 import { sendEmail } from './emailService';
-import { TopicDifficulty, PrepStatus } from '../types';
+import { AnalysisStatus, TopicDifficulty, PrepStatus } from '../types';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -173,11 +173,19 @@ const generateStudyPlanAndContent = async (
 // Expose a generic handler for both in-memory and Bull workers to call
 export const handleJob = async (type: string, data: any) => {
   console.log(`[QueueService] Handling job of type ${type}...`);
+
+  // Mark as processing early so we can detect crash-stuck jobs on restart
+  let prep = await InterviewPrep.findById(data.prepId);
+  if (!prep) {
+    console.warn(`[QueueService] InterviewPrep ${data.prepId} not found – skipping job.`);
+    return;
+  }
+  prep.analysisStatus = AnalysisStatus.PROCESSING;
+  await prep.save();
+
   try {
-    const prep = await InterviewPrep.findById(data.prepId);
-    if (!prep) {
-      throw new Error(`InterviewPrep with ID ${data.prepId} not found.`);
-    }
+    // Re-fetch after marking (avoids stale reference race)
+    prep = (await InterviewPrep.findById(data.prepId))!;
     const user = await User.findById(data.userId);
     if (!user) {
       throw new Error(`User with ID ${data.userId} not found.`);
@@ -202,6 +210,7 @@ export const handleJob = async (type: string, data: any) => {
         );
         prep.studyPlan = studyPlanResult;
         prep.status = PrepStatus.ACTIVE;
+        prep.analysisStatus = AnalysisStatus.COMPLETED;
 
         const totalTopicsCount = prep.studyPlan.dailySchedule.flatMap((day) => day.topics).length;
         prep.progress.totalTopics = totalTopicsCount;
@@ -237,6 +246,7 @@ export const handleJob = async (type: string, data: any) => {
         prep.progress.totalTopics = newTotalTopicsCount;
         prep.progress.topicsCompleted = 0;
         prep.progress.overallPercentage = newTotalTopicsCount > 0 ? 0 : 100;
+        prep.analysisStatus = AnalysisStatus.COMPLETED;
 
         await prep.save();
 
@@ -256,6 +266,16 @@ export const handleJob = async (type: string, data: any) => {
     console.log(`[QueueService] Job of type ${type} processed successfully.`);
   } catch (error: any) {
     console.error(`[QueueService] Error handling job of type ${type}:`, error?.message || error);
+    // Mark as failed in DB so the recovery scan won't loop it indefinitely
+    try {
+      const failedPrep = await InterviewPrep.findById(data.prepId);
+      if (failedPrep && failedPrep.analysisStatus !== AnalysisStatus.COMPLETED) {
+        failedPrep.analysisStatus = AnalysisStatus.FAILED;
+        await failedPrep.save();
+      }
+    } catch (saveErr: any) {
+      console.error('[QueueService] Could not persist FAILED status:', saveErr?.message);
+    }
     // Note: when using Bull, retries/attempts will be handled by Bull configuration
     throw error;
   }

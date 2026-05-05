@@ -130,3 +130,32 @@ export const updateTopicMasteryLevel = async (req: Request, res: Response, next:
     next(err);
   }
 };
+
+export const updateTopic = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { id } = req.params;
+    const { notes } = req.body;
+
+    const topic = await Topic.findById(id);
+    if (!topic) {
+      return res.status(404).json({ message: 'Topic not found' });
+    }
+
+    const prep = await InterviewPrep.findOne({ _id: topic.interviewPrepId, userId: req.user._id });
+    if (!prep) {
+      return res.status(401).json({ message: 'Unauthorized to modify this topic' });
+    }
+
+    if (notes !== undefined) {
+      topic.notes = notes;
+    }
+
+    await topic.save();
+    res.status(200).json({ message: 'Topic updated successfully', topic });
+  } catch (err) {
+    next(err);
+  }
+}
+

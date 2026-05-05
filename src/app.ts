@@ -16,6 +16,7 @@ import mindMapRoutes from './routes/mindMaps';
 import flashcardRoutes from './routes/flashcards';
 import voiceRoutes from './routes/voice';
 import progressRoutes from './routes/progress';
+import mockInterviewRoutes from './routes/mockInterviews'; // Import mock interview routes
 import webhookRoutes from './routes/webhooks'; // Import webhook routes
 
 dotenv.config();
@@ -83,6 +84,7 @@ app.use('/api/mind-maps', mindMapRoutes);
 app.use('/api/flashcards', flashcardRoutes);
 app.use('/api/voice', voiceRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/mock-interviews', mockInterviewRoutes);
 
 // Error handling middleware
 app.use(errorHandler);
