@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import axios from 'axios';
 // For Google Cloud TTS
 // import { TextToSpeechClient } from '@google-cloud/text-to-speech';
 // For ElevenLabs
@@ -27,42 +28,39 @@ dotenv.config();
  * @returns A promise that resolves with the audio content (e.g., base64 string or URL).
  */
 export const synthesizeSpeech = async (text: string, voiceSettings?: any): Promise<string> => {
-  if (!process.env.GOOGLE_CLOUD_TTS_KEY && !process.env.ELEVENLABS_API_KEY) {
-    console.warn('No TTS API key (Google Cloud or ElevenLabs) found. Using mock TTS response.');
-    // In a real application, you might generate a very simple WAV or MP3
-    // or provide a public URL to a pre-recorded "mock" audio file.
-    // For now, we'll return a placeholder string.
+  const apiKey = process.env.TTS_API_KEY;
+  const apiUrl = process.env.TTS_API_URL || process.env.TTS_API_URL_BASE || 'https://api.example.com/tts/api/generate';
+
+  if (!apiKey) {
+    console.warn('No TTS API key found. Using mock TTS response.');
     return `MOCK_AUDIO_CONTENT_FOR: "${text.substring(0, 50)}..."`;
   }
 
-  // --- Google Cloud TTS Implementation (example) ---
-  // if (googleTtsClient) {
-  //   const [response] = await googleTtsClient.synthesizeSpeech({
-  //     input: { text: text },
-  //     voice: { languageCode: voiceSettings?.languageCode || 'en-US', ssmlGender: voiceSettings?.gender || 'NEUTRAL' },
-  //     audioConfig: { audioEncoding: 'MP3' },
-  //   });
-  //   if (response.audioContent) {
-  //     return (response.audioContent as Buffer).toString('base64');
-  //   }
-  //   throw new Error('Google Cloud TTS returned no audio content.');
-  // }
+  try {
+    const payload = {
+      text,
+      voice: voiceSettings?.voice || 'voice_1',
+      settings: {
+        speed: voiceSettings?.speed ?? 1.0,
+        stability: voiceSettings?.stability ?? 0.5,
+      },
+    };
 
-  // --- ElevenLabs TTS Implementation (example) ---
-  // if (elevenLabsClient) {
-  //   const audio = await elevenLabsClient.generate({
-  //     voice_id: voiceSettings?.voiceId || '21m00Tcm4TlvDq8ikWAM', // Default 'Rachael'
-  //     text: text,
-  //     model_id: 'eleven_monolingual_v1',
-  //     voice_settings: {
-  //       stability: voiceSettings?.stability || 0.75,
-  //       similarity_boost: voiceSettings?.similarityBoost || 0.75,
-  //     },
-  //   });
-  //   // Assuming audio is a ReadableStream, convert to base64 or save to file and return URL
-  //   // For simplicity, returning a placeholder
-  //   return `ELEVENLABS_MOCK_AUDIO_CONTENT_FOR: "${text.substring(0, 50)}..."`;
-  // }
+    const resp = await axios.post(apiUrl, payload, {
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      responseType: 'json',
+    });
 
-  throw new Error('TTS service is configured but failed to process speech synthesis.');
+    // Expect the TTS API to return either a URL or base64 audio in `audio` or `url` field
+    const data = resp.data as any;
+    if (data.audio) return data.audio;
+    if (data.url) return data.url;
+    return JSON.stringify(data);
+  } catch (err) {
+    console.error('Error calling TTS provider:', (err as any)?.message || err);
+    throw new Error('TTS provider error');
+  }
 };

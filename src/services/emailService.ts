@@ -3,16 +3,18 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Create a transporter using your email service provider details
-// For SendGrid, you would typically use an SMTP transporter
+// Create a transporter using SMTP configuration via environment variables.
+// If SMTP vars are not provided, fall back to SendGrid SMTP settings (existing behavior).
+const smtpHost = process.env.SMTP_HOST || 'smtp.sendgrid.net';
+const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+const smtpUser = process.env.SMTP_USER || 'apikey';
+const smtpPass = process.env.SMTP_PASS || process.env.SENDGRID_API_KEY;
+
 const transporter = nodemailer.createTransport({
-  host: "smtp.sendgrid.net", // Example for SendGrid
-  port: 587,
-  secure: false, // Use TLS
-  auth: {
-    user: "apikey", // For SendGrid, user is 'apikey'
-    pass: process.env.SENDGRID_API_KEY,
-  },
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpPort === 465, // true for 465, false for other ports
+  auth: smtpUser && smtpPass ? { user: smtpUser, pass: smtpPass } : undefined,
 });
 
 interface EmailOptions {
@@ -35,8 +37,9 @@ export const sendEmail = async (options: EmailOptions) => {
     await transporter.sendMail(mailOptions);
     console.log('Email sent successfully to', options.to);
   } catch (error) {
-    console.error('Error sending email:', error);
-    // In a production environment, you might want to log this error to Sentry or similar
-    throw new Error('Failed to send email');
+    console.error('Error sending email (non-fatal):', (error as any)?.message || error);
+    // Do not block critical flows (e.g., registration) if email fails — log and continue.
+    // In production you may want to rethrow or surface this via monitoring.
+    return;
   }
 };

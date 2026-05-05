@@ -12,20 +12,22 @@ const setAuthCookies = (res: Response, accessToken: string, refreshToken: string
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 15 * 60 * 1000 // 15 minutes
   });
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   });
 };
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    console.log('Register request body:', req.body);
     const { error, value } = registerSchema.validate(req.body);
+   
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
     }
@@ -127,6 +129,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       accessToken,
     });
   } catch (err) {
+    console.error(err);
     next(err);
   }
 };
@@ -148,8 +151,8 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
       }
     }
 
-    res.clearCookie('accessToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
-    res.clearCookie('refreshToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
+    res.clearCookie('accessToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+    res.clearCookie('refreshToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
     res.status(200).json({ message: 'Logged out successfully' });
   } catch (err) {
     next(err);

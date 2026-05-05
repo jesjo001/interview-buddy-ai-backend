@@ -64,6 +64,28 @@ export const getFlashcardsByTopicId = async (req: Request, res: Response, next: 
   }
 };
 
+export const getFlashcardsByPrepId = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+    
+    const { prepId } = req.params;
+    const userId = req.user._id;
+
+    const prep = await InterviewPrep.findOne({ _id: prepId, userId });
+    if (!prep) {
+      return res.status(404).json({ message: 'Interview prep not found or not authorized' });
+    }
+
+    const topicIds = await Topic.find({ interviewPrepId: prepId }).select('_id');
+    const flashcards = await Flashcard.find({ topicId: { $in: topicIds.map(topic => topic._id) } });
+
+    res.status(200).json(flashcards);
+  } catch(err) {
+    next(err);
+  }
+}
+
+
 export const createCustomFlashcard = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Unauthorized' });

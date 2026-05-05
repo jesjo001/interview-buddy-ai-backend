@@ -5,7 +5,7 @@ export interface IActivity {
   type: ActivityType;
   timestamp: Date;
   duration?: number; // minutes
-  metadata?: Types.Map<any>; // Flexible for different activity types
+  metadata?: any; // Flexible for different activity types
 }
 
 export interface IUserProgress extends Document {

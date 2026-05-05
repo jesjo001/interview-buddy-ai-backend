@@ -5,10 +5,7 @@ import { ActivityType, LearningStyle, PrepStatus, TopicDifficulty } from '../typ
 export const registerSchema = Joi.object({
   name: Joi.string().min(3).max(30).required(),
   email: Joi.string().email().required(),
-  password: Joi.string()
-    .pattern(new RegExp('^[a-zA-Z0-9]{3,30}$')) // Basic pattern for demonstration
-    .min(6)
-    .required(),
+  password: Joi.string().min(8).required(),
 });
 
 // Login Schema
@@ -25,10 +22,7 @@ export const forgotPasswordSchema = Joi.object({
 // Reset Password Schema
 export const resetPasswordSchema = Joi.object({
   token: Joi.string().required(),
-  newPassword: Joi.string()
-    .pattern(new RegExp('^[a-zA-Z0-9]{3,30}$')) // Basic pattern for demonstration
-    .min(6)
-    .required(),
+  newPassword: Joi.string().min(8).required(),
 });
 
 // Update User Preferences Schema
