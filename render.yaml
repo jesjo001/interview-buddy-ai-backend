@@ -2,7 +2,6 @@ services:
   - type: web
     name: backend
     env: node
-    region: oregon
     plan: free
     buildCommand: npm install && npm run build
     startCommand: npm start
