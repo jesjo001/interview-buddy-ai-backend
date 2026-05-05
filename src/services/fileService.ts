@@ -1,6 +1,8 @@
 import multer from 'multer';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import pdf from 'pdf-parse';
+// pdf-parse has an unusual default export shape; require and cast to avoid TS issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pdf = require('pdf-parse');
 import mammoth from 'mammoth';
 import dotenv from 'dotenv';
 
@@ -53,8 +55,9 @@ export const uploadToS3 = async (file: Express.Multer.File): Promise<string> => 
 
 export const extractTextFromPDF = async (buffer: Buffer): Promise<string> => {
   try {
-    const data = await pdf(buffer);
-    return data.text;
+    const parser = (pdf as any).default || pdf;
+    const data = await parser(buffer);
+    return data?.text || '';
   } catch (error) {
     console.error('Error extracting text from PDF:', error);
     throw new Error('Failed to extract text from PDF');

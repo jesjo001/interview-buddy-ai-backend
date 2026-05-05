@@ -58,7 +58,7 @@ const generateStudyPlan = async (
         const { mindMap, ...content } = aiTopicContent;
         // Create the topic in DB
         //@ts-ignore
-        const newTopic = await Topic.create({
+        const newTopic = await (Topic as any).create({
           interviewPrepId: prepId,
           title: topicTitle,
           category: skillTopics.includes(topicTitle) ? 'Technical Skills' : 'Behavioral',

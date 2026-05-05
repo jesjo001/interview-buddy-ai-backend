@@ -8,7 +8,38 @@ import Flashcard from '../models/Flashcard';
 import { analyzeJobDescription, generateFlashcards, generateStudyPlanTopics, generateTopicContent, JobParsedData } from './aiService';
 import { calculateDaysBetween, getFutureDate } from '../utils/helpers';
 import { sendEmail } from './emailService';
-import { TopicDifficulty } from '../types';
+import { TopicDifficulty, PrepStatus } from '../types';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+// Redis / Bull optional integration
+const redisUrl = process.env.REDIS_URL || process.env.BULL_REDIS_URL || 'redis://127.0.0.1:6379';
+const enableBullEnv = (process.env.ENABLE_BULL || '').toLowerCase();
+const useBull = enableBullEnv === 'true' || (!!process.env.REDIS_URL && enableBullEnv !== 'false');
+
+let bullAvailable = false;
+let BullQueue: any = null;
+let BullWorker: any = null;
+let bullQueue: any = null;
+
+if (useBull) {
+  try {
+    // Dynamic import so package is optional
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const bullmq = require('bullmq');
+    BullQueue = bullmq.Queue;
+    BullWorker = bullmq.Worker;
+    bullAvailable = true;
+    bullQueue = new BullQueue('prep-jobs', { connection: { url: redisUrl } });
+    console.log('[QueueService] BullMQ detected and connected to Redis at', redisUrl);
+  } catch (err) {
+    console.warn('[QueueService] BullMQ not available or failed to connect. Falling back to in-memory queue.');
+    bullAvailable = false;
+  }
+} else {
+  console.log('[QueueService] BullMQ disabled by configuration. Using in-memory queue.');
+}
 
 interface JobDataBase {
   prepId: Types.ObjectId;
@@ -87,12 +118,12 @@ const generateStudyPlanAndContent = async (
 
         const { mindMap, ...content } = aiTopicContent;
 
-        const newTopic = await Topic.create({
+        const newTopic = await (Topic as any).create({
           interviewPrepId: prepId,
           title: topicTitle,
           category: skillTopics.includes(topicTitle) ? 'Technical Skills' : 'Behavioral',
           difficulty: TopicDifficulty.INTERMEDIATE,
-          content,
+          content: content as any,
           mindMap,
           masteryLevel: 0,
         });
@@ -139,27 +170,24 @@ const generateStudyPlanAndContent = async (
     dailySchedule: dailySchedule,
   };
 };
-
-const processJob = async (job: QueueJob) => {
-  job.status = 'processing';
-  console.log(`[QueueService] Processing job ${job.id} of type ${job.type}...`);
-
+// Expose a generic handler for both in-memory and Bull workers to call
+export const handleJob = async (type: string, data: any) => {
+  console.log(`[QueueService] Handling job of type ${type}...`);
   try {
-    const prep = await InterviewPrep.findById(job.data.prepId);
+    const prep = await InterviewPrep.findById(data.prepId);
     if (!prep) {
-      throw new Error(`InterviewPrep with ID ${job.data.prepId} not found.`);
+      throw new Error(`InterviewPrep with ID ${data.prepId} not found.`);
     }
-    const user = await User.findById(job.data.userId);
+    const user = await User.findById(data.userId);
     if (!user) {
-      throw new Error(`User with ID ${job.data.userId} not found.`);
+      throw new Error(`User with ID ${data.userId} not found.`);
     }
 
     let parsedJobData: JobParsedData;
 
-    switch (job.type) {
-      case 'analyze-job-description':
-        const analyzeData = job.data as AnalyzeJobDescriptionJobData;
-        parsedJobData = await analyzeJobDescription(analyzeData.jobDescription.rawText);
+    switch (type) {
+      case 'analyze-job-description': {
+        parsedJobData = await analyzeJobDescription(data.jobDescription.rawText);
 
         prep.jobDescription.parsedData = parsedJobData;
         await prep.save();
@@ -168,95 +196,68 @@ const processJob = async (job: QueueJob) => {
           prep._id,
           user._id,
           parsedJobData,
-          analyzeData.interviewDate,
-          analyzeData.dailyStudyTime,
-          analyzeData.learningStyle
+          new Date(data.interviewDate),
+          data.dailyStudyTime,
+          data.learningStyle
         );
         prep.studyPlan = studyPlanResult;
-        prep.status = TopicDifficulty.INTERMEDIATE; // Assuming active after generation, adjust as needed
+        prep.status = PrepStatus.ACTIVE;
 
-        // Update overall progress based on generated topics
-        const totalTopicsCount = prep.studyPlan.dailySchedule.flatMap(day => day.topics).length;
+        const totalTopicsCount = prep.studyPlan.dailySchedule.flatMap((day) => day.topics).length;
         prep.progress.totalTopics = totalTopicsCount;
-        prep.progress.overallPercentage = totalTopicsCount > 0 ? 0 : 100; // 0% at start
+        prep.progress.overallPercentage = totalTopicsCount > 0 ? 0 : 100;
 
         await prep.save();
 
         await sendEmail({
           to: user.email,
           subject: 'Your Interview Prep is Ready!',
-          html: `<p>Your interview preparation for <b>${parsedJobData.jobTitle}</b> at <b>${parsedJobData.company}</b> is ready! Log in to start studying.</p>`
+          html: `<p>Your interview preparation for <b>${parsedJobData.jobTitle}</b> at <b>${parsedJobData.company}</b> is ready! Log in to start studying.</p>`,
         });
         break;
+      }
 
-      case 'adjust-study-plan':
-        const adjustData = job.data as AdjustStudyPlanJobData;
-        parsedJobData = adjustData.jobDescription; // Use already parsed data
+      case 'adjust-study-plan': {
+        parsedJobData = data.jobDescription; // already parsed
 
-        // Clear existing topics and flashcards for this prep before regenerating
         await Topic.deleteMany({ interviewPrepId: prep._id });
-        await Flashcard.deleteMany({ userId: user._id, topicId: { $in: prep.studyPlan.dailySchedule.flatMap(day => day.topics.map(t => t.topicId)) } });
-
+        await Flashcard.deleteMany({ userId: user._id, topicId: { $in: prep.studyPlan.dailySchedule.flatMap((day) => day.topics.map((t) => t.topicId)) } });
 
         const adjustedStudyPlanResult = await generateStudyPlanAndContent(
           prep._id,
           user._id,
           parsedJobData,
-          adjustData.interviewDate,
-          adjustData.dailyStudyTime,
-          adjustData.learningStyle
+          new Date(data.interviewDate),
+          data.dailyStudyTime,
+          data.learningStyle
         );
         prep.studyPlan = adjustedStudyPlanResult;
-        
-        // Update overall progress based on regenerated topics
-        const newTotalTopicsCount = prep.studyPlan.dailySchedule.flatMap(day => day.topics).length;
+
+        const newTotalTopicsCount = prep.studyPlan.dailySchedule.flatMap((day) => day.topics).length;
         prep.progress.totalTopics = newTotalTopicsCount;
         prep.progress.topicsCompleted = 0;
-        prep.progress.overallPercentage = newTotalTopicsCount > 0 ? 0 : 100; // Reset progress
-        
+        prep.progress.overallPercentage = newTotalTopicsCount > 0 ? 0 : 100;
+
         await prep.save();
 
         await sendEmail({
           to: user.email,
           subject: 'Your Interview Prep Study Plan has been adjusted!',
-          html: `<p>Your study plan for <b>${prep.jobDescription.parsedData?.jobTitle}</b> has been updated based on your new interview date. Log in to see the changes.</p>`
+          html: `<p>Your study plan for <b>${prep.jobDescription.parsedData?.jobTitle}</b> has been updated based on your new interview date. Log in to see the changes.</p>`,
         });
         break;
+      }
 
       default:
-        console.warn(`[QueueService] Unknown job type: ${job.type}`);
+        console.warn(`[QueueService] Unknown job type: ${type}`);
         throw new Error('Unknown job type');
     }
 
-    job.status = 'completed';
-    console.log(`[QueueService] Job ${job.id} completed.`);
-    jobProcessor.emit('job:completed', job);
+    console.log(`[QueueService] Job of type ${type} processed successfully.`);
   } catch (error: any) {
-    job.status = 'failed';
-    job.retries++;
-    console.error(`[QueueService] Job ${job.id} failed: ${error.message}. Retries: ${job.retries}/${job.maxRetries}`);
-    if (job.retries < job.maxRetries) {
-      // Re-add to queue for retry (e.g., with a delay)
-      // For simplicity, directly re-adding. In production, might use a delayed queue or separate retry logic.
-      jobQueue.unshift(job);
-      jobProcessor.emit('job:retrying', job);
-    } else {
-      console.error(`[QueueService] Job ${job.id} permanently failed after ${job.maxRetries} retries.`);
-      jobProcessor.emit('job:failed', job);
-      // Send error notification to user/admin
-      try {
-        const user = await User.findById(job.data.userId);
-        if (user) {
-          await sendEmail({
-            to: user.email,
-            subject: `Action Required: Interview Prep Processing Failed`,
-            html: `<p>Dear ${user.name},</p><p>We encountered an issue while processing your interview prep for ${job.data.prepId}. Please try again or contact support if the issue persists.</p><p>Error: ${error.message}</p>`
-          });
-        }
-      } catch (emailError) {
-        console.error('Failed to send error email:', emailError);
-      }
-    }
+    console.error(`[QueueService] Error handling job of type ${type}:`, error?.message || error);
+    // Note: when using Bull, retries/attempts will be handled by Bull configuration
+    throw error;
   }
 };
 
@@ -269,16 +270,36 @@ const consumer = async () => {
   const job = jobQueue.shift(); // Get the next job from the queue
 
   if (job) {
-    await processJob(job);
+    try {
+      await handleJob(job.type, job.data);
+      job.status = 'completed';
+      jobProcessor.emit('job:completed', job);
+    } catch (err) {
+      job.status = 'failed';
+      job.retries++;
+      if (job.retries < job.maxRetries) {
+        jobQueue.unshift(job);
+        jobProcessor.emit('job:retrying', job);
+      } else {
+        jobProcessor.emit('job:failed', job);
+      }
+    }
   }
   isProcessing = false;
 };
 
 // Start the consumer at regular intervals
-let consumerInterval: NodeJS.Timeout;
+let consumerInterval: NodeJS.Timeout | undefined;
 
 export const jobQueueService = {
   add: (type: string, data: AnalyzeJobDescriptionJobData | AdjustStudyPlanJobData, maxRetries: number = 3) => {
+    if (useBull && bullAvailable && bullQueue) {
+      // Add job to Bull queue with attempts for retries
+      bullQueue.add(type, data, { attempts: maxRetries, backoff: { type: 'exponential', delay: 2000 } });
+      console.log(`[QueueService] Added job to Bull queue of type ${type}`);
+      return;
+    }
+
     const newJob: QueueJob = {
       id: `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -294,6 +315,24 @@ export const jobQueueService = {
   },
 
   start: () => {
+    if (useBull && bullAvailable && BullWorker) {
+      // Start a separate worker process instead. If running in the same process we still create a Worker instance.
+      try {
+        const worker = new BullWorker(
+          'prep-jobs',
+          async (job: any) => {
+            console.log('[QueueService] Bull worker processing job', job.name);
+            await handleJob(job.name, job.data);
+          },
+          { connection: { url: redisUrl } }
+        );
+        console.log('[QueueService] Bull worker started in-process.');
+        return;
+      } catch (err) {
+        console.warn('[QueueService] Failed to start in-process Bull worker, falling back to in-memory consumer.', err);
+      }
+    }
+
     if (!consumerInterval) {
       console.log('[QueueService] Starting job queue consumer...');
       consumerInterval = setInterval(consumer, JOB_PROCESSING_INTERVAL);

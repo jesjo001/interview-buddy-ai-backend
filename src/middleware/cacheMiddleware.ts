@@ -17,6 +17,7 @@ export const cacheMiddleware = (req: Request, res: Response, next: NextFunction)
     // Indicate cached response and set cache-control for client/CDN
     res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
     res.setHeader('X-Cache', 'HIT');
+    res.setHeader('Content-Type', 'application/json');
     return res.send(cachedBody);
   }
 

@@ -1,13 +1,15 @@
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
+import { ResourceType } from '../types';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
-// Fallback to OpenAI if needed, but not implemented for now to keep it concise
+const openaiApiKey = process.env.OPENAI_API_KEY;
+const openaiModel = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+let openaiClient: OpenAI | null = null;
+if (openaiApiKey) {
+  openaiClient = new OpenAI({ apiKey: openaiApiKey });
+}
 
 export interface JobParsedData {
   jobTitle?: string;
@@ -32,8 +34,8 @@ export interface Flashcard {
 }
 
 export const analyzeJobDescription = async (rawText: string): Promise<JobParsedData> => {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('ANTHROPIC_API_KEY is not set. Using mock AI response for job description analysis.');
+  if (!openaiClient) {
+    console.warn('OPENAI_API_KEY is not set. Using mock AI response for job description analysis.');
     return {
       jobTitle: 'Software Engineer',
       company: 'Mock Company',
@@ -62,22 +64,18 @@ export const analyzeJobDescription = async (rawText: string): Promise<JobParsedD
   `;
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 2000,
+    const response = await openaiClient.chat.completions.create({
+      model: openaiModel,
       messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2000,
     });
 
-    const firstContent = response.content[0];
-    if (firstContent && firstContent.type === 'text') {
-      const content = firstContent.text;
-      // Clean content before parsing, sometimes AI adds markdown code blocks
-      const jsonString = content.replace(/```json\n|\n```/g, '').trim();
-      return JSON.parse(jsonString);
-    }
-    throw new Error('No content received from AI for job description analysis.');
+    const content = response?.choices?.[0]?.message?.content;
+    if (!content) throw new Error('No content received from OpenAI for job description analysis.');
+    const jsonString = content.replace(/```json\n|\n```/g, '').trim();
+    return JSON.parse(jsonString);
   } catch (error) {
-    console.error('Error analyzing job description with Anthropic:', error);
+    console.error('Error analyzing job description with OpenAI:', error);
     // Fallback to mock data on error
     return {
       jobTitle: 'Software Engineer (Fallback)',
@@ -94,32 +92,26 @@ export const generateStudyPlanTopics = async (
   parsedData: JobParsedData,
   difficulty: string
 ): Promise<string[]> => {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('ANTHROPIC_API_KEY is not set. Using mock AI response for study plan topics.');
+  if (!openaiClient) {
+    console.warn('OPENAI_API_KEY is not set. Using mock AI response for study plan topics.');
     return [...parsedData.requiredSkills, ...parsedData.preferredSkills];
   }
 
   const skills = [...parsedData.requiredSkills, ...parsedData.preferredSkills].join(', ');
-  const prompt = `
-  Based on these skills: ${skills}, and a difficulty level of ${difficulty}, suggest a list of 5-10 distinct topics suitable for interview preparation.
-  Return a JSON array of strings, e.g., ["Topic 1", "Topic 2"].
-  `;
+  const prompt = `Based on these skills: ${skills}, and a difficulty level of ${difficulty}, suggest a list of 5-10 distinct topics suitable for interview preparation. Return a JSON array of strings.`;
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 500,
+    const response = await openaiClient.chat.completions.create({
+      model: openaiModel,
       messages: [{ role: 'user', content: prompt }],
+      max_tokens: 500,
     });
-    const firstContent = response.content[0];
-    if (firstContent && firstContent.type === 'text') {
-      const content = firstContent.text;
-      const jsonString = content.replace(/```json\n|\n```/g, '').trim();
-      return JSON.parse(jsonString);
-    }
-    throw new Error('No content received from AI for study plan topics.');
+    const content = response?.choices?.[0]?.message?.content;
+    if (!content) throw new Error('No content received from OpenAI for study plan topics.');
+    const jsonString = content.replace(/```json\n|\n```/g, '').trim();
+    return JSON.parse(jsonString);
   } catch (error) {
-    console.error('Error generating study plan topics with Anthropic:', error);
+    console.error('Error generating study plan topics with OpenAI:', error);
     return ['Fundamentals', 'Advanced Concepts'];
   }
 };
@@ -129,8 +121,8 @@ export const generateTopicContent = async (
   skill: string,
   difficulty: string
 ): Promise<TopicContent> => {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('ANTHROPIC_API_KEY is not set. Using mock AI response for topic content.');
+  if (!openaiClient) {
+    console.warn('OPENAI_API_KEY is not set. Using mock AI response for topic content.');
     return {
       summary: `This is a mock summary for ${skill} at ${difficulty} level.`,
       keyPoints: [`Key point 1 for ${skill}`, `Key point 2 for ${skill}`],
@@ -143,36 +135,37 @@ export const generateTopicContent = async (
     };
   }
 
-  const prompt = `
-  Create interview prep content for the skill: "${skill}" at a "${difficulty}" level.
-  Provide a TL;DR summary (50-100 words), 3-5 key points as bullet points, a detailed deep dive explanation (markdown format is okay), and 1-2 relevant resources (articles/videos).
-  Also, generate a simple JSON structure for a mind map (nodes and edges) representing the sub-topics of this skill.
-
-  Return JSON with the following structure:
-  {
-    "summary": "50-100 word TL;DR",
-    "keyPoints": ["point1", "point2", ...],
-    "deepDive": "Detailed explanation with examples",
-    "resources": [{ "type": "article", "url": "...", "title": "..." }],
-    "mindMap": { "nodes": [{ id: "1", data: { label: "Main Topic" }, position: { x: 0, y: 0 } }], "edges": [] }
-  }
-  `;
+  const prompt = `Create interview prep content for the skill: "${skill}" at a "${difficulty}" level. Provide a TL;DR summary (50-100 words), 3-5 key points as bullet points, a detailed deep dive explanation (markdown format is okay), and 1-2 relevant resources (articles/videos). Also, generate a simple JSON structure for a mind map (nodes and edges) representing the sub-topics of this skill. Return JSON with keys: summary, keyPoints, deepDive, resources, mindMap.`;
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 3000,
+    const response = await openaiClient.chat.completions.create({
+      model: openaiModel,
       messages: [{ role: 'user', content: prompt }],
+      max_tokens: 3000,
     });
-    const firstContent = response.content[0];
-    if (firstContent && firstContent.type === 'text') {
-      const content = firstContent.text;
-      const jsonString = content.replace(/```json\n|\n```/g, '').trim();
-      return JSON.parse(jsonString);
+    const content = response?.choices?.[0]?.message?.content;
+    if (!content) throw new Error('No content received from OpenAI for topic content generation.');
+    const jsonString = content.replace(/```json\n|\n```/g, '').trim();
+    const parsed = JSON.parse(jsonString) as any;
+
+    // Normalize resources types to ResourceType enum values
+    if (Array.isArray(parsed.resources)) {
+      parsed.resources = parsed.resources.map((r: any) => {
+        const typeStr = (r.type || '').toString().toLowerCase();
+        let mapped: ResourceType = ResourceType.ARTICLE;
+        if (typeStr.includes('video')) mapped = ResourceType.VIDEO;
+        else if (typeStr.includes('doc') || typeStr.includes('documentation') || typeStr.includes('docs')) mapped = ResourceType.DOCUMENTATION;
+        else mapped = ResourceType.ARTICLE;
+        return { type: mapped, url: r.url, title: r.title };
+      });
     }
-    throw new Error('No content received from AI for topic content generation.');
+
+    // Ensure mindMap exists
+    if (!parsed.mindMap) parsed.mindMap = { nodes: [], edges: [] };
+
+    return parsed as TopicContent;
   } catch (error) {
-    console.error('Error generating topic content with Anthropic:', error);
+    console.error('Error generating topic content with OpenAI:', error);
     return {
       summary: `Fallback summary for ${skill}`,
       keyPoints: [`Fallback key point for ${skill}`],
@@ -187,41 +180,28 @@ export const generateFlashcards = async (
   topicContent: string,
   count: number = 5
 ): Promise<Flashcard[]> => {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('ANTHROPIC_API_KEY is not set. Using mock AI response for flashcards.');
+  if (!openaiClient) {
+    console.warn('OPENAI_API_KEY is not set. Using mock AI response for flashcards.');
     return [
       { front: `Mock Question 1 for ${topicContent.substring(0, 20)}`, back: 'Mock Answer 1' },
       { front: `Mock Question 2 for ${topicContent.substring(0, 20)}`, back: 'Mock Answer 2' },
     ];
   }
 
-  const prompt = `
-  Generate ${count} flashcards (question and answer pairs) based on the following text:
-  ${topicContent}
-
-  Return a JSON array of objects, where each object has "front" (question) and "back" (answer) properties.
-  Example:
-  [
-    { "front": "What is X?", "back": "Y" },
-    { "front": "How does A work?", "back": "B" }
-  ]
-  `;
+  const prompt = `Generate ${count} flashcards (question and answer pairs) based on the following text: ${topicContent}. Return a JSON array of objects with properties 'front' and 'back'.`;
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 1500,
+    const response = await openaiClient.chat.completions.create({
+      model: openaiModel,
       messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1500,
     });
-    const firstContent = response.content[0];
-    if (firstContent && firstContent.type === 'text') {
-      const content = firstContent.text;
-      const jsonString = content.replace(/```json\n|\n```/g, '').trim();
-      return JSON.parse(jsonString);
-    }
-    throw new Error('No content received from AI for flashcard generation.');
+    const content = response?.choices?.[0]?.message?.content;
+    if (!content) throw new Error('No content received from OpenAI for flashcard generation.');
+    const jsonString = content.replace(/```json\n|\n```/g, '').trim();
+    return JSON.parse(jsonString);
   } catch (error) {
-    console.error('Error generating flashcards with Anthropic:', error);
+    console.error('Error generating flashcards with OpenAI:', error);
     return [{ front: 'Fallback Question', back: 'Fallback Answer' }];
   }
 };
