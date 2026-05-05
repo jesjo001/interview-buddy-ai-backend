@@ -54,7 +54,6 @@ bower_components
 
 # Node.js
 node_modules/
-dist/
 
 # Environment variables
 .env
