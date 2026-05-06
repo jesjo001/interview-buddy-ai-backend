@@ -13,6 +13,7 @@ const Flashcard_1 = __importDefault(require("../models/Flashcard"));
 const aiService_1 = require("./aiService");
 const helpers_1 = require("../utils/helpers");
 const emailService_1 = require("./emailService");
+const reminderService_1 = require("./reminderService");
 const types_1 = require("../types");
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
@@ -124,6 +125,15 @@ const generateStudyPlanAndContent = async (prepId, userId, parsedData, interview
 // Expose a generic handler for both in-memory and Bull workers to call
 const handleJob = async (type, data) => {
     console.log(`[QueueService] Handling job of type ${type}...`);
+    if (type === 'send-reminder') {
+        const reminderData = data;
+        const reminder = await (0, reminderService_1.dispatchReminderById)(reminderData.reminderId);
+        if (!reminder) {
+            throw new Error(`Reminder ${reminderData.reminderId} not found for dispatch`);
+        }
+        console.log(`[QueueService] Reminder job ${reminderData.reminderId} processed.`);
+        return;
+    }
     // Mark as processing early so we can detect crash-stuck jobs on restart
     let prep = await InterviewPrep_1.default.findById(data.prepId);
     if (!prep) {
@@ -207,8 +217,13 @@ const consumer = async () => {
     if (isProcessing || jobQueue.length === 0) {
         return;
     }
+    const now = new Date();
+    const dueJobIndex = jobQueue.findIndex((job) => !job.runAt || job.runAt <= now);
+    if (dueJobIndex === -1) {
+        return;
+    }
     isProcessing = true;
-    const job = jobQueue.shift(); // Get the next job from the queue
+    const [job] = jobQueue.splice(dueJobIndex, 1);
     if (job) {
         try {
             await (0, exports.handleJob)(job.type, job.data);
@@ -232,10 +247,14 @@ const consumer = async () => {
 // Start the consumer at regular intervals
 let consumerInterval;
 exports.jobQueueService = {
-    add: (type, data, maxRetries = 3) => {
+    add: (type, data, maxRetries = 3, delayMs = 0) => {
         if (useBull && bullAvailable && bullQueue) {
             // Add job to Bull queue with attempts for retries
-            bullQueue.add(type, data, { attempts: maxRetries, backoff: { type: 'exponential', delay: 2000 } });
+            bullQueue.add(type, data, {
+                attempts: maxRetries,
+                backoff: { type: 'exponential', delay: 2000 },
+                delay: Math.max(0, delayMs),
+            });
             console.log(`[QueueService] Added job to Bull queue of type ${type}`);
             return;
         }
@@ -244,6 +263,7 @@ exports.jobQueueService = {
             type,
             data,
             timestamp: new Date(),
+            runAt: delayMs > 0 ? new Date(Date.now() + delayMs) : undefined,
             status: 'pending',
             retries: 0,
             maxRetries,

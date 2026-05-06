@@ -1,0 +1,18 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const chatbotController_1 = require("../controllers/chatbotController");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.get('/personas', chatbotController_1.getPersonas);
+router.get('/preferences', chatbotController_1.getCopilotPreferences);
+router.put('/preferences', chatbotController_1.updateCopilotPreferences);
+router.get('/context/:prepId', chatbotController_1.getChatbotContext);
+router.get('/reminders/preview/:prepId', chatbotController_1.previewReminders);
+router.get('/reminders', chatbotController_1.getReminderFeed);
+router.post('/reminders', chatbotController_1.createScheduledReminder);
+router.put('/reminders/:reminderId/dismiss', chatbotController_1.dismissReminderItem);
+router.post('/reminders/:reminderId/send-now', chatbotController_1.sendReminderNow);
+router.post('/message', chatbotController_1.sendMessage);
+exports.default = router;

@@ -18,7 +18,17 @@ const UserSchema = new mongoose_1.Schema({
         learningStyle: { type: String, enum: Object.values(types_1.LearningStyle), default: types_1.LearningStyle.VISUAL },
         dailyStudyTime: { type: Number, default: 60 },
         voiceEnabled: { type: Boolean, default: true },
-        language: { type: String, default: 'en' }
+        language: { type: String, default: 'en' },
+        copilotPersona: {
+            type: String,
+            enum: ['coach', 'recruiter', 'study-buddy'],
+            default: 'coach',
+        },
+        reminderChannels: {
+            inApp: { type: Boolean, default: true },
+            email: { type: Boolean, default: true },
+            push: { type: Boolean, default: false },
+        },
     },
     refreshTokens: [{ type: String }],
     emailVerified: { type: Boolean, default: false },

@@ -22,6 +22,7 @@ const flashcards_1 = __importDefault(require("./routes/flashcards"));
 const voice_1 = __importDefault(require("./routes/voice"));
 const progress_1 = __importDefault(require("./routes/progress"));
 const mockInterviews_1 = __importDefault(require("./routes/mockInterviews")); // Import mock interview routes
+const chatbot_1 = __importDefault(require("./routes/chatbot"));
 const webhooks_1 = __importDefault(require("./routes/webhooks")); // Import webhook routes
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -71,6 +72,7 @@ app.use('/api/flashcards', flashcards_1.default);
 app.use('/api/voice', voice_1.default);
 app.use('/api/progress', progress_1.default);
 app.use('/api/mock-interviews', mockInterviews_1.default);
+app.use('/api/chatbot', chatbot_1.default);
 // Error handling middleware
 app.use(errorHandler_1.errorHandler);
 exports.default = app;

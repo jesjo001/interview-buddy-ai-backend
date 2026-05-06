@@ -8,6 +8,7 @@ import Flashcard from '../models/Flashcard';
 import { analyzeJobDescription, generateFlashcards, generateStudyPlanTopics, generateTopicContent, JobParsedData } from './aiService';
 import { calculateDaysBetween, getFutureDate } from '../utils/helpers';
 import { sendEmail } from './emailService';
+import { dispatchReminderById } from './reminderService';
 import { AnalysisStatus, TopicDifficulty, PrepStatus } from '../types';
 import dotenv from 'dotenv';
 
@@ -60,11 +61,16 @@ interface AdjustStudyPlanJobData extends JobDataBase {
   learningStyle: string;
 }
 
+interface ReminderDispatchJobData extends JobDataBase {
+  reminderId: string;
+}
+
 interface QueueJob {
   id: string;
   type: string;
-  data: AnalyzeJobDescriptionJobData | AdjustStudyPlanJobData;
+  data: AnalyzeJobDescriptionJobData | AdjustStudyPlanJobData | ReminderDispatchJobData;
   timestamp: Date;
+  runAt?: Date;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   retries: number;
   maxRetries: number;
@@ -173,6 +179,16 @@ const generateStudyPlanAndContent = async (
 // Expose a generic handler for both in-memory and Bull workers to call
 export const handleJob = async (type: string, data: any) => {
   console.log(`[QueueService] Handling job of type ${type}...`);
+
+  if (type === 'send-reminder') {
+    const reminderData = data as ReminderDispatchJobData;
+    const reminder = await dispatchReminderById(reminderData.reminderId);
+    if (!reminder) {
+      throw new Error(`Reminder ${reminderData.reminderId} not found for dispatch`);
+    }
+    console.log(`[QueueService] Reminder job ${reminderData.reminderId} processed.`);
+    return;
+  }
 
   // Mark as processing early so we can detect crash-stuck jobs on restart
   let prep = await InterviewPrep.findById(data.prepId);
@@ -286,8 +302,14 @@ const consumer = async () => {
     return;
   }
 
+  const now = new Date();
+  const dueJobIndex = jobQueue.findIndex((job) => !job.runAt || job.runAt <= now);
+  if (dueJobIndex === -1) {
+    return;
+  }
+
   isProcessing = true;
-  const job = jobQueue.shift(); // Get the next job from the queue
+  const [job] = jobQueue.splice(dueJobIndex, 1);
 
   if (job) {
     try {
@@ -312,10 +334,19 @@ const consumer = async () => {
 let consumerInterval: NodeJS.Timeout | undefined;
 
 export const jobQueueService = {
-  add: (type: string, data: AnalyzeJobDescriptionJobData | AdjustStudyPlanJobData, maxRetries: number = 3) => {
+  add: (
+    type: string,
+    data: AnalyzeJobDescriptionJobData | AdjustStudyPlanJobData | ReminderDispatchJobData,
+    maxRetries: number = 3,
+    delayMs: number = 0
+  ) => {
     if (useBull && bullAvailable && bullQueue) {
       // Add job to Bull queue with attempts for retries
-      bullQueue.add(type, data, { attempts: maxRetries, backoff: { type: 'exponential', delay: 2000 } });
+      bullQueue.add(type, data, {
+        attempts: maxRetries,
+        backoff: { type: 'exponential', delay: 2000 },
+        delay: Math.max(0, delayMs),
+      });
       console.log(`[QueueService] Added job to Bull queue of type ${type}`);
       return;
     }
@@ -325,6 +356,7 @@ export const jobQueueService = {
       type,
       data,
       timestamp: new Date(),
+      runAt: delayMs > 0 ? new Date(Date.now() + delayMs) : undefined,
       status: 'pending',
       retries: 0,
       maxRetries,

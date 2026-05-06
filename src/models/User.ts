@@ -18,6 +18,12 @@ export interface IUser extends Document {
     dailyStudyTime: number; // minutes
     voiceEnabled: boolean;
     language: string;
+    copilotPersona: 'coach' | 'recruiter' | 'study-buddy';
+    reminderChannels: {
+      inApp: boolean;
+      email: boolean;
+      push: boolean;
+    };
   };
   refreshTokens: string[];
   emailVerified: boolean;
@@ -43,7 +49,17 @@ const UserSchema = new Schema<IUser>({
     learningStyle: { type: String, enum: Object.values(LearningStyle), default: LearningStyle.VISUAL },
     dailyStudyTime: { type: Number, default: 60 },
     voiceEnabled: { type: Boolean, default: true },
-    language: { type: String, default: 'en' }
+    language: { type: String, default: 'en' },
+    copilotPersona: {
+      type: String,
+      enum: ['coach', 'recruiter', 'study-buddy'],
+      default: 'coach',
+    },
+    reminderChannels: {
+      inApp: { type: Boolean, default: true },
+      email: { type: Boolean, default: true },
+      push: { type: Boolean, default: false },
+    },
   },
   refreshTokens: [{ type: String }],
   emailVerified: { type: Boolean, default: false },

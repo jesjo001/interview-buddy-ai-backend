@@ -32,6 +32,12 @@ exports.updatePreferencesSchema = joi_1.default.object({
     dailyStudyTime: joi_1.default.number().min(10).max(240).optional(),
     voiceEnabled: joi_1.default.boolean().optional(),
     language: joi_1.default.string().optional(),
+    copilotPersona: joi_1.default.string().valid('coach', 'recruiter', 'study-buddy').optional(),
+    reminderChannels: joi_1.default.object({
+        inApp: joi_1.default.boolean().optional(),
+        email: joi_1.default.boolean().optional(),
+        push: joi_1.default.boolean().optional(),
+    }).optional(),
 });
 // Create Interview Prep Schema
 exports.createInterviewPrepSchema = joi_1.default.object({

@@ -31,6 +31,12 @@ export const updatePreferencesSchema = Joi.object({
   dailyStudyTime: Joi.number().min(10).max(240).optional(),
   voiceEnabled: Joi.boolean().optional(),
   language: Joi.string().optional(),
+  copilotPersona: Joi.string().valid('coach', 'recruiter', 'study-buddy').optional(),
+  reminderChannels: Joi.object({
+    inApp: Joi.boolean().optional(),
+    email: Joi.boolean().optional(),
+    push: Joi.boolean().optional(),
+  }).optional(),
 });
 
 // Create Interview Prep Schema
