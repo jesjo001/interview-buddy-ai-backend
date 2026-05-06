@@ -1,7 +1,12 @@
 "use strict";
 // types/index.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.InterviewOutcome = exports.UserLevel = exports.InterviewRound = exports.InterviewStatus = exports.InterviewDifficulty = exports.InterviewType = exports.AnalysisStatus = exports.PrepStatus = exports.FlashcardRating = exports.ResourceType = exports.TopicDifficulty = exports.ActivityType = exports.LearningStyle = exports.SubscriptionStatus = exports.SubscriptionPlan = void 0;
+exports.InterviewOutcome = exports.UserLevel = exports.InterviewRound = exports.InterviewStatus = exports.InterviewDifficulty = exports.InterviewType = exports.AnalysisStatus = exports.PrepStatus = exports.FlashcardRating = exports.ResourceType = exports.TopicDifficulty = exports.ActivityType = exports.LearningStyle = exports.SubscriptionStatus = exports.SubscriptionPlan = exports.UserRole = void 0;
+var UserRole;
+(function (UserRole) {
+    UserRole["USER"] = "user";
+    UserRole["ADMIN"] = "admin";
+})(UserRole || (exports.UserRole = UserRole = {}));
 var SubscriptionPlan;
 (function (SubscriptionPlan) {
     SubscriptionPlan["FREE"] = "free";

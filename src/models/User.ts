@@ -11,6 +11,8 @@ export interface IUser extends Document {
     plan: SubscriptionPlan;
     status: SubscriptionStatus;
     validUntil?: Date;
+    flutterwaveCustomerId?: string;
+    flutterwaveSubscriptionId?: string;
     stripeCustomerId?: string;
     stripeSubscriptionId?: string;
   };
@@ -44,6 +46,8 @@ const UserSchema = new Schema<IUser>({
     plan: { type: String, enum: Object.values(SubscriptionPlan), default: SubscriptionPlan.FREE },
     status: { type: String, enum: Object.values(SubscriptionStatus), default: SubscriptionStatus.ACTIVE },
     validUntil: { type: Date },
+    flutterwaveCustomerId: { type: String },
+    flutterwaveSubscriptionId: { type: String },
     stripeCustomerId: { type: String },
     stripeSubscriptionId: { type: String }
   },

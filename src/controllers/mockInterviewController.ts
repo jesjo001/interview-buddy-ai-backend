@@ -5,6 +5,7 @@ import BehavioralFeedback from '../models/BehavioralFeedback';
 import InterviewPrep from '../models/InterviewPrep';
 import UserReadinessTimeline from '../models/UserReadinessTimeline';
 import { generateMockInterviewQuestions, analyzeUserResponse, calculateInterviewScore } from '../services/mockInterviewService';
+import { checkFeatureQuota, consumeFeatureQuota } from '../services/quotaService';
 
 const logger = { info: console.info, error: console.error, warn: console.warn };
 
@@ -15,6 +16,19 @@ const logger = { info: console.info, error: console.error, warn: console.warn };
 export const startMockInterview = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+
+    const quota = await checkFeatureQuota(req.user as any, 'mockInterviewStart', 1);
+    if (!quota.allowed) {
+      return res.status(403).json({
+        error: 'Mock interview quota exceeded for your current plan',
+        code: 'quota_exceeded',
+        feature: quota.feature,
+        limit: quota.limit,
+        used: quota.used,
+        remaining: quota.remaining,
+        plan: quota.plan,
+      });
+    }
 
     const { prepId, interviewType = InterviewType.TECHNICAL, difficulty = InterviewDifficulty.MEDIUM, duration = 45 } = req.body;
 
@@ -65,6 +79,8 @@ export const startMockInterview = async (req: Request, res: Response, next: Next
     if (!firstQuestion || firstQuestion.length === 0) {
       throw new Error('Failed to generate interview question');
     }
+
+    await consumeFeatureQuota(req.user._id as any, 'mockInterviewStart', 1);
 
     logger.info(`Mock interview started: ${mockInterview._id}`);
 

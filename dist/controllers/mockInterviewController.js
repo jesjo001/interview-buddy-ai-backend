@@ -43,6 +43,7 @@ const BehavioralFeedback_1 = __importDefault(require("../models/BehavioralFeedba
 const InterviewPrep_1 = __importDefault(require("../models/InterviewPrep"));
 const UserReadinessTimeline_1 = __importDefault(require("../models/UserReadinessTimeline"));
 const mockInterviewService_1 = require("../services/mockInterviewService");
+const quotaService_1 = require("../services/quotaService");
 const logger = { info: console.info, error: console.error, warn: console.warn };
 /**
  * Start a new mock interview session
@@ -52,6 +53,18 @@ const startMockInterview = async (req, res, next) => {
     try {
         if (!req.user)
             return res.status(401).json({ message: 'Unauthorized' });
+        const quota = await (0, quotaService_1.checkFeatureQuota)(req.user, 'mockInterviewStart', 1);
+        if (!quota.allowed) {
+            return res.status(403).json({
+                error: 'Mock interview quota exceeded for your current plan',
+                code: 'quota_exceeded',
+                feature: quota.feature,
+                limit: quota.limit,
+                used: quota.used,
+                remaining: quota.remaining,
+                plan: quota.plan,
+            });
+        }
         const { prepId, interviewType = MockInterview_1.InterviewType.TECHNICAL, difficulty = MockInterview_1.InterviewDifficulty.MEDIUM, duration = 45 } = req.body;
         // Validate prepId
         if (!prepId || !mongoose_1.Types.ObjectId.isValid(prepId)) {
@@ -89,6 +102,7 @@ const startMockInterview = async (req, res, next) => {
         if (!firstQuestion || firstQuestion.length === 0) {
             throw new Error('Failed to generate interview question');
         }
+        await (0, quotaService_1.consumeFeatureQuota)(req.user._id, 'mockInterviewStart', 1);
         logger.info(`Mock interview started: ${mockInterview._id}`);
         return res.status(200).json({
             success: true,

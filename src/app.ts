@@ -20,16 +20,17 @@ import mockInterviewRoutes from './routes/mockInterviews'; // Import mock interv
 import chatbotRoutes from './routes/chatbot';
 import webhookRoutes from './routes/webhooks'; // Import webhook routes
 import adminRoutes from './routes/admin';
+import billingRoutes from './routes/billing';
 
 dotenv.config();
 
 const app: Application = express();
 
-// Extend Request to include rawBody for Stripe webhooks
+// Extend Request with optional rawBody for webhook integrations
 declare global {
   namespace Express {
     interface Request {
-      rawBody: Buffer;
+      rawBody?: Buffer;
     }
   }
 }
@@ -89,6 +90,7 @@ app.use('/api/progress', progressRoutes);
 app.use('/api/mock-interviews', mockInterviewRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/billing', billingRoutes);
 
 // Error handling middleware
 app.use(errorHandler);

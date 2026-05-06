@@ -11,6 +11,7 @@ import { IDailyScheduleTopic } from '../models/InterviewPrep';
 import { Types } from 'mongoose';
 import { PrepStatus, TopicDifficulty } from '../types';
 import { extractTextFromDOCX, extractTextFromPDF, upload, uploadToS3 } from '../services/fileService';
+import { checkFeatureQuota, consumeFeatureQuota } from '../services/quotaService';
 
 
 // Helper function for study plan generation (can be moved to a service)
@@ -120,6 +121,19 @@ export const createInterviewPrep = async (req: Request, res: Response, next: Nex
   try {
     if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
 
+    const quota = await checkFeatureQuota(req.user as any, 'interviewPrepCreate', 1);
+    if (!quota.allowed) {
+      return res.status(403).json({
+        error: 'Interview prep quota exceeded for your current plan',
+        code: 'quota_exceeded',
+        feature: quota.feature,
+        limit: quota.limit,
+        used: quota.used,
+        remaining: quota.remaining,
+        plan: quota.plan,
+      });
+    }
+
     // Handle file upload separately or ensure req.body contains text
     let jobDescriptionText = req.body.jobDescription;
     let fileUrl: string | undefined = undefined;
@@ -169,6 +183,8 @@ export const createInterviewPrep = async (req: Request, res: Response, next: Nex
       dailyStudyTime: preferences?.dailyStudyTime || req.user.preferences.dailyStudyTime,
       learningStyle: preferences?.learningStyle || req.user.preferences.learningStyle,
     });
+
+    await consumeFeatureQuota(req.user._id as any, 'interviewPrepCreate', 1);
 
 
     res.status(201).json({

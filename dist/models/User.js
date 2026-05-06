@@ -7,10 +7,13 @@ const UserSchema = new mongoose_1.Schema({
     passwordHash: { type: String, required: true },
     name: { type: String, required: true },
     avatar: { type: String, default: '' },
+    role: { type: String, enum: Object.values(types_1.UserRole), default: types_1.UserRole.USER },
     subscription: {
         plan: { type: String, enum: Object.values(types_1.SubscriptionPlan), default: types_1.SubscriptionPlan.FREE },
         status: { type: String, enum: Object.values(types_1.SubscriptionStatus), default: types_1.SubscriptionStatus.ACTIVE },
         validUntil: { type: Date },
+        flutterwaveCustomerId: { type: String },
+        flutterwaveSubscriptionId: { type: String },
         stripeCustomerId: { type: String },
         stripeSubscriptionId: { type: String }
     },

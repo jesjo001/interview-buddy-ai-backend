@@ -26,7 +26,7 @@ npm run dev
 npm run build; npm start
 
 Environment variables
-- Ensure `.env` or environment variables are set for MongoDB, Stripe, SendGrid, OpenAI API, and AWS S3 if used.
+- Ensure `.env` or environment variables are set for MongoDB, Flutterwave, SendGrid, OpenAI API, and AWS S3 if used.
 - Example entries are present in `.env.example` (now includes `MONGO_MAX_POOL_SIZE`)
 
 Production recommendations

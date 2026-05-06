@@ -13,6 +13,7 @@ const queueService_1 = require("../services/queueService");
 const helpers_1 = require("../utils/helpers");
 const types_1 = require("../types");
 const fileService_1 = require("../services/fileService");
+const quotaService_1 = require("../services/quotaService");
 // Helper function for study plan generation (can be moved to a service)
 const generateStudyPlan = async (prepId, userId, parsedData, // JobParsedData
 interviewDate, dailyStudyTime, learningStyle // Assuming 'visual', 'auditory', 'kinesthetic'
@@ -100,6 +101,18 @@ const createInterviewPrep = async (req, res, next) => {
     try {
         if (!req.user)
             return res.status(401).json({ message: 'Unauthorized' });
+        const quota = await (0, quotaService_1.checkFeatureQuota)(req.user, 'interviewPrepCreate', 1);
+        if (!quota.allowed) {
+            return res.status(403).json({
+                error: 'Interview prep quota exceeded for your current plan',
+                code: 'quota_exceeded',
+                feature: quota.feature,
+                limit: quota.limit,
+                used: quota.used,
+                remaining: quota.remaining,
+                plan: quota.plan,
+            });
+        }
         // Handle file upload separately or ensure req.body contains text
         let jobDescriptionText = req.body.jobDescription;
         let fileUrl = undefined;
@@ -145,6 +158,7 @@ const createInterviewPrep = async (req, res, next) => {
             dailyStudyTime: preferences?.dailyStudyTime || req.user.preferences.dailyStudyTime,
             learningStyle: preferences?.learningStyle || req.user.preferences.learningStyle,
         });
+        await (0, quotaService_1.consumeFeatureQuota)(req.user._id, 'interviewPrepCreate', 1);
         res.status(201).json({
             message: 'Interview prep created. AI analysis and study plan generation started in background.',
             prepId: newPrep._id,

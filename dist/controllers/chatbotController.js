@@ -7,6 +7,7 @@ exports.sendReminderNow = exports.dismissReminderItem = exports.getReminderFeed 
 const mongoose_1 = require("mongoose");
 const joi_1 = __importDefault(require("joi"));
 const chatbotService_1 = require("../services/chatbotService");
+const quotaService_1 = require("../services/quotaService");
 const reminderService_1 = require("../services/reminderService");
 const queueService_1 = require("../services/queueService");
 const messageSchema = joi_1.default.object({
@@ -137,6 +138,18 @@ const sendMessage = async (req, res, next) => {
     try {
         if (!req.user)
             return res.status(401).json({ error: 'Unauthorized' });
+        const quota = await (0, quotaService_1.checkFeatureQuota)(req.user, 'chatbotMessage', 1);
+        if (!quota.allowed) {
+            return res.status(403).json({
+                error: 'Chatbot message quota exceeded for your current plan',
+                code: 'quota_exceeded',
+                feature: quota.feature,
+                limit: quota.limit,
+                used: quota.used,
+                remaining: quota.remaining,
+                plan: quota.plan,
+            });
+        }
         const { error, value } = messageSchema.validate(req.body);
         if (error) {
             return res.status(400).json({ error: error.details[0].message });
@@ -150,6 +163,7 @@ const sendMessage = async (req, res, next) => {
             return res.status(404).json({ error: 'Preparation context not found' });
         }
         const reply = await (0, chatbotService_1.generateChatbotReply)({ message, persona: effectivePersona, context });
+        await (0, quotaService_1.consumeFeatureQuota)(req.user._id, 'chatbotMessage', 1);
         const reminders = context ? (0, chatbotService_1.buildReminderSuggestions)(context) : [];
         return res.status(200).json({
             success: true,

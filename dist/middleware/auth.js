@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireSubscription = exports.authenticate = void 0;
+exports.requireAdmin = exports.requireSubscription = exports.authenticate = void 0;
 const jwt_1 = require("../utils/jwt");
 const User_1 = __importDefault(require("../models/User"));
 const types_1 = require("../types");
@@ -54,3 +54,13 @@ const requireSubscription = (minPlan) => {
     };
 };
 exports.requireSubscription = requireSubscription;
+const requireAdmin = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({ error: 'User not authenticated' });
+    }
+    if (req.user.role !== types_1.UserRole.ADMIN) {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+};
+exports.requireAdmin = requireAdmin;

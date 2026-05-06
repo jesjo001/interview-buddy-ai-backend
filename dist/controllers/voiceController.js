@@ -8,6 +8,12 @@ const ttsService_1 = require("../services/ttsService");
 const UserProgress_1 = __importDefault(require("../models/UserProgress"));
 const types_1 = require("../types");
 const validators_1 = require("../utils/validators");
+const quotaService_1 = require("../services/quotaService");
+const estimateVoiceMinutes = (text) => {
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+    const minutes = Math.ceil(words / 130);
+    return Math.max(1, minutes);
+};
 const synthesizeContent = async (req, res, next) => {
     try {
         if (!req.user)
@@ -16,7 +22,21 @@ const synthesizeContent = async (req, res, next) => {
         if (!text) {
             return res.status(400).json({ message: 'Text content is required for synthesis' });
         }
+        const estimatedMinutes = estimateVoiceMinutes(text);
+        const quota = await (0, quotaService_1.checkFeatureQuota)(req.user, 'voiceMinutes', estimatedMinutes);
+        if (!quota.allowed) {
+            return res.status(403).json({
+                error: 'Voice minutes quota exceeded for your current plan',
+                code: 'quota_exceeded',
+                feature: quota.feature,
+                limit: quota.limit,
+                used: quota.used,
+                remaining: quota.remaining,
+                plan: quota.plan,
+            });
+        }
         const audioContent = await (0, ttsService_1.synthesizeSpeech)(text, voiceSettings);
+        await (0, quotaService_1.consumeFeatureQuota)(req.user._id, 'voiceMinutes', estimatedMinutes);
         res.status(200).json({ audioContent });
     }
     catch (err) {

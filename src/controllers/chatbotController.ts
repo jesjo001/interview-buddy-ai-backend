@@ -7,6 +7,7 @@ import {
   generateChatbotReply,
   getContextSnapshot,
 } from '../services/chatbotService';
+import { checkFeatureQuota, consumeFeatureQuota } from '../services/quotaService';
 import {
   createReminder,
   dispatchReminderById,
@@ -151,6 +152,19 @@ export const sendMessage = async (req: Request, res: Response, next: NextFunctio
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
+    const quota = await checkFeatureQuota(req.user as any, 'chatbotMessage', 1);
+    if (!quota.allowed) {
+      return res.status(403).json({
+        error: 'Chatbot message quota exceeded for your current plan',
+        code: 'quota_exceeded',
+        feature: quota.feature,
+        limit: quota.limit,
+        used: quota.used,
+        remaining: quota.remaining,
+        plan: quota.plan,
+      });
+    }
+
     const { error, value } = messageSchema.validate(req.body);
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
@@ -167,6 +181,7 @@ export const sendMessage = async (req: Request, res: Response, next: NextFunctio
     }
 
     const reply = await generateChatbotReply({ message, persona: effectivePersona, context });
+    await consumeFeatureQuota(req.user._id as any, 'chatbotMessage', 1);
     const reminders = context ? buildReminderSuggestions(context) : [];
 
     return res.status(200).json({
