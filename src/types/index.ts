@@ -1,5 +1,10 @@
 // types/index.ts
 
+export enum UserRole {
+  USER = 'user',
+  ADMIN = 'admin'
+}
+
 export enum SubscriptionPlan {
   FREE = 'free',
   PRO = 'pro',

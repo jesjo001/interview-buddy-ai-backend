@@ -19,6 +19,7 @@ import progressRoutes from './routes/progress';
 import mockInterviewRoutes from './routes/mockInterviews'; // Import mock interview routes
 import chatbotRoutes from './routes/chatbot';
 import webhookRoutes from './routes/webhooks'; // Import webhook routes
+import adminRoutes from './routes/admin';
 
 dotenv.config();
 
@@ -87,6 +88,7 @@ app.use('/api/voice', voiceRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/mock-interviews', mockInterviewRoutes);
 app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Error handling middleware
 app.use(errorHandler);

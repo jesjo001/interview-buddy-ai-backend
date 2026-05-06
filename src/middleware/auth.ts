@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
 import User from '../models/User';
 import { IUser } from '../models/User';
-import { SubscriptionPlan } from '../types';
+import { SubscriptionPlan, UserRole } from '../types';
 
 // Extend the Request type to include the user property
 declare global {
@@ -65,4 +65,14 @@ export const requireSubscription = (minPlan: SubscriptionPlan) => {
     }
     next();
   };
+};
+
+export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'User not authenticated' });
+  }
+  if (req.user.role !== UserRole.ADMIN) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
 };

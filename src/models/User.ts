@@ -1,11 +1,12 @@
 import { Schema, model, Document } from 'mongoose';
-import { SubscriptionPlan, SubscriptionStatus, LearningStyle } from '../types';
+import { SubscriptionPlan, SubscriptionStatus, LearningStyle, UserRole } from '../types';
 
 export interface IUser extends Document {
   email: string;
   passwordHash: string;
   name: string;
   avatar?: string;
+  role: UserRole;
   subscription: {
     plan: SubscriptionPlan;
     status: SubscriptionStatus;
@@ -38,6 +39,7 @@ const UserSchema = new Schema<IUser>({
   passwordHash: { type: String, required: true },
   name: { type: String, required: true },
   avatar: { type: String, default: '' },
+  role: { type: String, enum: Object.values(UserRole), default: UserRole.USER },
   subscription: {
     plan: { type: String, enum: Object.values(SubscriptionPlan), default: SubscriptionPlan.FREE },
     status: { type: String, enum: Object.values(SubscriptionStatus), default: SubscriptionStatus.ACTIVE },
