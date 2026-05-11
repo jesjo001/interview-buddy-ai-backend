@@ -22,6 +22,7 @@ import webhookRoutes from './routes/webhooks'; // Import webhook routes
 import adminRoutes from './routes/admin';
 import billingRoutes from './routes/billing';
 
+import subscriptionRoutes from './routes/subscriptions';
 dotenv.config();
 
 const app: Application = express();
@@ -92,6 +93,7 @@ app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/billing', billingRoutes);
 
+app.use('/api/subscriptions', subscriptionRoutes);
 // Error handling middleware
 app.use(errorHandler);
 

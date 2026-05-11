@@ -3,7 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.stripeWebhookHandler = exports.flutterwaveWebhookHandler = void 0;
 const flutterwaveService_1 = require("../services/flutterwaveService");
 const flutterwaveWebhookHandler = async (req, res, next) => {
-    const sig = req.headers['verif-hash'];
+    const sig = req.headers['flutterwave-signature'] ||
+        req.headers['verif-hash'];
     const payload = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body || {});
     try {
         await (0, flutterwaveService_1.handleFlutterwaveWebhook)(payload, sig);

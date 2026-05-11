@@ -7,6 +7,7 @@ const app_1 = __importDefault(require("./app"));
 const database_1 = __importDefault(require("./config/database"));
 const queueService_1 = require("./services/queueService");
 const recoveryService_1 = require("./services/recoveryService");
+const subscriptionRenewalWorker_1 = require("./scripts/subscriptionRenewalWorker");
 const PORT = process.env.PORT || 5000;
 const bootstrap = async () => {
     // 1. Connect to MongoDB first — everything depends on it
@@ -15,6 +16,8 @@ const bootstrap = async () => {
     await (0, recoveryService_1.recoverIncompletePreps)();
     // 3. Start the job queue processor
     queueService_1.jobQueueService.start();
+    // 4. Start the subscription renewal worker
+    await (0, subscriptionRenewalWorker_1.startRenewalWorker)();
     app_1.default.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
     });

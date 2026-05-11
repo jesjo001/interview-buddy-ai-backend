@@ -17,6 +17,13 @@ export enum SubscriptionStatus {
   EXPIRED = 'expired'
 }
 
+export enum SubscriptionStatusV2 {
+  ACTIVE = 'active',
+  PAUSED = 'paused',
+  CANCELLED = 'cancelled',
+  EXPIRED = 'expired'
+}
+
 export enum LearningStyle {
   VISUAL = 'visual',
   AUDITORY = 'auditory',

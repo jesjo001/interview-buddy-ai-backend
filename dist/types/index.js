@@ -1,7 +1,7 @@
 "use strict";
 // types/index.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.InterviewOutcome = exports.UserLevel = exports.InterviewRound = exports.InterviewStatus = exports.InterviewDifficulty = exports.InterviewType = exports.AnalysisStatus = exports.PrepStatus = exports.FlashcardRating = exports.ResourceType = exports.TopicDifficulty = exports.ActivityType = exports.LearningStyle = exports.SubscriptionStatus = exports.SubscriptionPlan = exports.UserRole = void 0;
+exports.InterviewOutcome = exports.UserLevel = exports.InterviewRound = exports.InterviewStatus = exports.InterviewDifficulty = exports.InterviewType = exports.AnalysisStatus = exports.PrepStatus = exports.FlashcardRating = exports.ResourceType = exports.TopicDifficulty = exports.ActivityType = exports.LearningStyle = exports.SubscriptionStatusV2 = exports.SubscriptionStatus = exports.SubscriptionPlan = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["USER"] = "user";
@@ -19,6 +19,13 @@ var SubscriptionStatus;
     SubscriptionStatus["CANCELED"] = "canceled";
     SubscriptionStatus["EXPIRED"] = "expired";
 })(SubscriptionStatus || (exports.SubscriptionStatus = SubscriptionStatus = {}));
+var SubscriptionStatusV2;
+(function (SubscriptionStatusV2) {
+    SubscriptionStatusV2["ACTIVE"] = "active";
+    SubscriptionStatusV2["PAUSED"] = "paused";
+    SubscriptionStatusV2["CANCELLED"] = "cancelled";
+    SubscriptionStatusV2["EXPIRED"] = "expired";
+})(SubscriptionStatusV2 || (exports.SubscriptionStatusV2 = SubscriptionStatusV2 = {}));
 var LearningStyle;
 (function (LearningStyle) {
     LearningStyle["VISUAL"] = "visual";

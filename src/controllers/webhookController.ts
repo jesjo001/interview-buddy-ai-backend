@@ -2,7 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { handleFlutterwaveWebhook } from '../services/flutterwaveService';
 
 export const flutterwaveWebhookHandler = async (req: Request, res: Response, next: NextFunction) => {
-  const sig = req.headers['verif-hash'] as string | undefined;
+  const sig =
+    (req.headers['flutterwave-signature'] as string | undefined) ||
+    (req.headers['verif-hash'] as string | undefined);
   const payload = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body || {});
 
   try {

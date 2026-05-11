@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleStripeWebhook = exports.createCheckoutSession = exports.getBillingPlanCatalog = exports.verifyFlutterwaveTransaction = exports.handleFlutterwaveWebhook = exports.createFlutterwaveCheckoutSession = void 0;
 const axios_1 = __importDefault(require("axios"));
+const crypto_1 = __importDefault(require("crypto"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const User_1 = __importDefault(require("../models/User"));
 const types_1 = require("../types");
@@ -92,10 +93,11 @@ const activateSubscriptionFromTransaction = async (userId, transactionData, plan
     return selectedPlan;
 };
 const createFlutterwaveCheckoutSession = async (userId, planOrAmount, quantity = 1) => {
+    const publicKey = process.env.FLUTTERWAVE_PUBLIC_KEY;
     const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
     const frontendUrl = process.env.FRONTEND_URL?.split(',')[0]?.trim();
-    if (!secretKey || !frontendUrl) {
-        console.warn('Flutterwave secret key or frontend URL not configured. Using mock checkout session.');
+    if (!secretKey || !frontendUrl || !publicKey) {
+        console.warn('Flutterwave keys or frontend URL not configured. Using mock checkout session.');
         return {
             id: 'mock_flw_tx_ref',
             url: `${frontendUrl || ''}/success?status=mock`,
@@ -134,6 +136,7 @@ const createFlutterwaveCheckoutSession = async (userId, planOrAmount, quantity =
         }, {
             headers: {
                 Authorization: `Bearer ${secretKey}`,
+                'X-FLW-API-KEY': publicKey,
             },
         });
         return {
@@ -156,22 +159,55 @@ const handleFlutterwaveWebhook = async (payload, signature) => {
         console.warn('Flutterwave webhook hash not configured. Skipping webhook verification.');
         return null;
     }
-    if (!signature || signature !== webhookHash) {
+    const isValidHmacSignature = (rawPayload, incomingSignature, secretHash) => {
+        const expected = crypto_1.default
+            .createHmac('sha256', secretHash)
+            .update(rawPayload)
+            .digest('base64');
+        const expectedBuffer = Buffer.from(expected);
+        const incomingBuffer = Buffer.from(incomingSignature);
+        if (expectedBuffer.length !== incomingBuffer.length) {
+            return false;
+        }
+        return crypto_1.default.timingSafeEqual(expectedBuffer, incomingBuffer);
+    };
+    // Current docs: use flutterwave-signature (HMAC-SHA256 base64).
+    // Legacy compatibility: some older integrations pass verif-hash directly.
+    if (!signature) {
+        throw new Error('Missing Flutterwave webhook signature');
+    }
+    const signatureLooksLikeHmac = signature.length > 40;
+    const isValid = signatureLooksLikeHmac
+        ? isValidHmacSignature(payload, signature, webhookHash)
+        : signature === webhookHash;
+    if (!isValid) {
         throw new Error('Invalid Flutterwave webhook signature');
     }
     const event = JSON.parse(payload);
-    if (event.event !== 'charge.completed') {
+    const eventType = event.type || event.event;
+    if (eventType !== 'charge.completed') {
         return event;
     }
     const transactionData = event.data;
-    if (transactionData?.status !== 'successful') {
+    if (!transactionData) {
         return event;
     }
-    const userId = transactionData.meta?.userId;
+    const paymentStatus = (transactionData.status || '').toLowerCase();
+    if (!['successful', 'succeeded'].includes(paymentStatus)) {
+        return event;
+    }
+    const userId = transactionData.meta?.userId || transactionData.meta?.user_id;
     if (!userId) {
         return event;
     }
-    await activateSubscriptionFromTransaction(userId, transactionData);
+    await activateSubscriptionFromTransaction(userId, {
+        id: transactionData.id,
+        customer: transactionData.customer,
+        meta: {
+            plan: transactionData.meta?.plan,
+            userId,
+        },
+    });
     return event;
 };
 exports.handleFlutterwaveWebhook = handleFlutterwaveWebhook;
@@ -184,19 +220,30 @@ const verifyFlutterwaveTransaction = async (userId, options) => {
         throw new Error('Either txRef or transactionId is required for verification');
     }
     let response;
+    const publicKey = process.env.FLUTTERWAVE_PUBLIC_KEY;
+    if (!publicKey) {
+        throw new Error('Flutterwave public key is not configured');
+    }
     if (options.transactionId) {
         response = await axios_1.default.get(`${FLUTTERWAVE_API_BASE_URL}/transactions/${encodeURIComponent(options.transactionId)}/verify`, {
-            headers: { Authorization: `Bearer ${secretKey}` },
+            headers: {
+                Authorization: `Bearer ${secretKey}`,
+                'X-FLW-API-KEY': publicKey,
+            },
         });
     }
     else {
         response = await axios_1.default.get(`${FLUTTERWAVE_API_BASE_URL}/transactions/verify_by_reference`, {
-            headers: { Authorization: `Bearer ${secretKey}` },
+            headers: {
+                Authorization: `Bearer ${secretKey}`,
+                'X-FLW-API-KEY': publicKey,
+            },
             params: { tx_ref: options.txRef },
         });
     }
     const tx = response.data.data;
-    if (tx?.status !== 'successful') {
+    const status = (tx?.status || '').toLowerCase();
+    if (!['successful', 'succeeded'].includes(status)) {
         throw new Error('Transaction has not been completed successfully');
     }
     if (tx.meta?.userId && tx.meta.userId !== userId) {

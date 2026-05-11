@@ -26,6 +26,7 @@ const chatbot_1 = __importDefault(require("./routes/chatbot"));
 const webhooks_1 = __importDefault(require("./routes/webhooks")); // Import webhook routes
 const admin_1 = __importDefault(require("./routes/admin"));
 const billing_1 = __importDefault(require("./routes/billing"));
+const subscriptions_1 = __importDefault(require("./routes/subscriptions"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 // Security Middleware
@@ -77,6 +78,7 @@ app.use('/api/mock-interviews', mockInterviews_1.default);
 app.use('/api/chatbot', chatbot_1.default);
 app.use('/api/admin', admin_1.default);
 app.use('/api/billing', billing_1.default);
+app.use('/api/subscriptions', subscriptions_1.default);
 // Error handling middleware
 app.use(errorHandler_1.errorHandler);
 exports.default = app;

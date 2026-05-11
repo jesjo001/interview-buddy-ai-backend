@@ -17,6 +17,11 @@ const UserSchema = new mongoose_1.Schema({
         stripeCustomerId: { type: String },
         stripeSubscriptionId: { type: String }
     },
+    renewalTracking: {
+        lastRenewalAttempt: { type: Date },
+        failedRenewalAttempts: { type: Number, default: 0 },
+        nextRenewalDate: { type: Date }
+    },
     preferences: {
         learningStyle: { type: String, enum: Object.values(types_1.LearningStyle), default: types_1.LearningStyle.VISUAL },
         dailyStudyTime: { type: Number, default: 60 },

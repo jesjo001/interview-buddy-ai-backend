@@ -14,6 +14,7 @@ const helpers_1 = require("../utils/helpers");
 const types_1 = require("../types");
 const fileService_1 = require("../services/fileService");
 const quotaService_1 = require("../services/quotaService");
+const subscriptionPlans_1 = require("../config/subscriptionPlans");
 // Helper function for study plan generation (can be moved to a service)
 const generateStudyPlan = async (prepId, userId, parsedData, // JobParsedData
 interviewDate, dailyStudyTime, learningStyle // Assuming 'visual', 'auditory', 'kinesthetic'
@@ -101,11 +102,40 @@ const createInterviewPrep = async (req, res, next) => {
     try {
         if (!req.user)
             return res.status(401).json({ message: 'Unauthorized' });
+        const now = new Date();
+        const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+        const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+        const effectivePlan = (0, subscriptionPlans_1.resolveEffectivePlan)(req.user.subscription);
+        const prepLimit = subscriptionPlans_1.PLAN_ENTITLEMENTS[effectivePlan].interviewPrepCreate;
+        // Hard guard against quota usage desync: enforce based on actual prep documents created this period.
+        if (prepLimit !== null) {
+            const prepsCreatedThisPeriod = await InterviewPrep_1.default.countDocuments({
+                userId: req.user._id,
+                createdAt: { $gte: periodStart, $lt: periodEnd },
+            });
+            if (prepsCreatedThisPeriod >= prepLimit) {
+                const suggestedPlan = effectivePlan === types_1.SubscriptionPlan.FREE ? types_1.SubscriptionPlan.PRO : types_1.SubscriptionPlan.ENTERPRISE;
+                return res.status(403).json({
+                    error: 'You reached your interview prep limit. Upgrade your plan to create another interview prep.',
+                    code: 'quota_exceeded',
+                    upgradeRequired: true,
+                    suggestedPlan,
+                    feature: 'interviewPrepCreate',
+                    limit: prepLimit,
+                    used: prepsCreatedThisPeriod,
+                    remaining: 0,
+                    plan: effectivePlan,
+                });
+            }
+        }
         const quota = await (0, quotaService_1.checkFeatureQuota)(req.user, 'interviewPrepCreate', 1);
         if (!quota.allowed) {
+            const suggestedPlan = quota.plan === types_1.SubscriptionPlan.FREE ? types_1.SubscriptionPlan.PRO : types_1.SubscriptionPlan.ENTERPRISE;
             return res.status(403).json({
-                error: 'Interview prep quota exceeded for your current plan',
+                error: 'You reached your interview prep limit. Upgrade your plan to create another interview prep.',
                 code: 'quota_exceeded',
+                upgradeRequired: true,
+                suggestedPlan,
                 feature: quota.feature,
                 limit: quota.limit,
                 used: quota.used,

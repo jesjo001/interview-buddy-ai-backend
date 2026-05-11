@@ -16,6 +16,11 @@ export interface IUser extends Document {
     stripeCustomerId?: string;
     stripeSubscriptionId?: string;
   };
+     renewalTracking?: {
+       lastRenewalAttempt?: Date;
+       failedRenewalAttempts: number;
+       nextRenewalDate?: Date;
+     };
   preferences: {
     learningStyle: LearningStyle;
     dailyStudyTime: number; // minutes
@@ -51,6 +56,11 @@ const UserSchema = new Schema<IUser>({
     stripeCustomerId: { type: String },
     stripeSubscriptionId: { type: String }
   },
+     renewalTracking: {
+       lastRenewalAttempt: { type: Date },
+       failedRenewalAttempts: { type: Number, default: 0 },
+       nextRenewalDate: { type: Date }
+     },
   preferences: {
     learningStyle: { type: String, enum: Object.values(LearningStyle), default: LearningStyle.VISUAL },
     dailyStudyTime: { type: Number, default: 60 },

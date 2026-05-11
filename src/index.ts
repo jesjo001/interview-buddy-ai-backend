@@ -2,6 +2,7 @@ import app from './app';
 import connectDB from './config/database';
 import { jobQueueService } from './services/queueService';
 import { recoverIncompletePreps } from './services/recoveryService';
+import { startRenewalWorker } from './scripts/subscriptionRenewalWorker';
 
 const PORT = process.env.PORT || 5000;
 
@@ -14,6 +15,9 @@ const bootstrap = async () => {
 
   // 3. Start the job queue processor
   jobQueueService.start();
+
+    // 4. Start the subscription renewal worker
+    await startRenewalWorker();
 
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

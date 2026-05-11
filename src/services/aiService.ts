@@ -11,6 +11,150 @@ if (openaiApiKey) {
   openaiClient = new OpenAI({ apiKey: openaiApiKey });
 }
 
+const stripMarkdownFences = (value: string): string => {
+  const trimmed = value.trim();
+  const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+
+  return trimmed.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+};
+
+const extractBalancedJson = (value: string): string | null => {
+  const start = value.search(/[\[{]/);
+  if (start < 0) return null;
+
+  const openChar = value[start];
+  const closeChar = openChar === '{' ? '}' : ']';
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < value.length; i++) {
+    const ch = value[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === openChar) {
+      depth++;
+      continue;
+    }
+
+    if (ch === closeChar) {
+      depth--;
+      if (depth === 0) {
+        return value.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
+};
+
+const sanitizeJsonCandidate = (value: string): string => {
+  let result = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i];
+
+    if (!inString) {
+      if (ch === '"') {
+        inString = true;
+      }
+      result += ch;
+      continue;
+    }
+
+    if (escaped) {
+      escaped = false;
+      result += ch;
+      continue;
+    }
+
+    if (ch === '\\') {
+      escaped = true;
+      result += ch;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = false;
+      result += ch;
+      continue;
+    }
+
+    // Guard against invalid raw control chars inside JSON string values.
+    if (ch === '\n') {
+      result += '\\n';
+      continue;
+    }
+    if (ch === '\r') {
+      result += '\\r';
+      continue;
+    }
+    if (ch === '\t') {
+      result += '\\t';
+      continue;
+    }
+    if (ch.charCodeAt(0) < 0x20) {
+      result += ' ';
+      continue;
+    }
+
+    result += ch;
+  }
+
+  return result;
+};
+
+const parseModelJson = <T>(content: string): T => {
+  const raw = content.replace(/^\uFEFF/, '').trim();
+  const deFenced = stripMarkdownFences(raw);
+
+  const candidates = [
+    deFenced,
+    extractBalancedJson(deFenced),
+    extractBalancedJson(raw),
+  ].filter((v): v is string => Boolean(v && v.trim().length));
+
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as T;
+    } catch (err) {
+      lastError = err;
+      try {
+        return JSON.parse(sanitizeJsonCandidate(candidate)) as T;
+      } catch (sanitizeErr) {
+        lastError = sanitizeErr;
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Unable to parse model JSON output');
+};
+
 export interface JobParsedData {
   jobTitle?: string;
   company?: string;
@@ -72,8 +216,7 @@ export const analyzeJobDescription = async (rawText: string): Promise<JobParsedD
 
     const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error('No content received from OpenAI for job description analysis.');
-    const jsonString = content.replace(/```json\n|\n```/g, '').trim();
-    return JSON.parse(jsonString);
+    return parseModelJson<JobParsedData>(content);
   } catch (error) {
     console.error('Error analyzing job description with OpenAI:', error);
     // Fallback to mock data on error
@@ -108,8 +251,11 @@ export const generateStudyPlanTopics = async (
     });
     const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error('No content received from OpenAI for study plan topics.');
-    const jsonString = content.replace(/```json\n|\n```/g, '').trim();
-    return JSON.parse(jsonString);
+    const parsed = parseModelJson<unknown>(content);
+    if (!Array.isArray(parsed)) {
+      throw new Error('Unexpected topics format: expected an array of strings');
+    }
+    return parsed.map((topic) => String(topic)).filter((topic) => topic.trim().length > 0);
   } catch (error) {
     console.error('Error generating study plan topics with OpenAI:', error);
     return ['Fundamentals', 'Advanced Concepts'];
@@ -145,8 +291,7 @@ export const generateTopicContent = async (
     });
     const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error('No content received from OpenAI for topic content generation.');
-    const jsonString = content.replace(/```json\n|\n```/g, '').trim();
-    const parsed = JSON.parse(jsonString) as any;
+    const parsed = parseModelJson<any>(content);
 
     // Normalize resources types to ResourceType enum values
     if (Array.isArray(parsed.resources)) {
@@ -198,8 +343,17 @@ export const generateFlashcards = async (
     });
     const content = response?.choices?.[0]?.message?.content;
     if (!content) throw new Error('No content received from OpenAI for flashcard generation.');
-    const jsonString = content.replace(/```json\n|\n```/g, '').trim();
-    return JSON.parse(jsonString);
+    const parsed = parseModelJson<unknown>(content);
+    if (!Array.isArray(parsed)) {
+      throw new Error('Unexpected flashcards format: expected an array');
+    }
+
+    return parsed
+      .map((item) => ({
+        front: String((item as any)?.front || '').trim(),
+        back: String((item as any)?.back || '').trim(),
+      }))
+      .filter((item) => item.front.length > 0 && item.back.length > 0);
   } catch (error) {
     console.error('Error generating flashcards with OpenAI:', error);
     return [{ front: 'Fallback Question', back: 'Fallback Answer' }];
