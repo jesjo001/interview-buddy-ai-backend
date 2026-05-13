@@ -78,6 +78,9 @@ app.use(cacheMiddleware);
 
 // Routes
 app.get('/', (req: Request, res: Response) => {
+  if (req.query.promailer_verify === 'a6d4757d19a01d39c73e05269e7393be') {
+    return res.sendStatus(200);
+  }
   res.send('Interview Prep AI Backend API');
 });
 app.use('/api/auth', authRoutes);
